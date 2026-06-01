@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="description" content="Mobile photo capture plus camera metadata and engine export tool." />
+  <title>Phone Scene Calibrator</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>Phone Scene Calibrator</h1>
+      <p class="subhead">Capture a background plate, pair it with camera/device JSON, and export scene/camera data for engines.</p>
+    </div>
+    <div id="secureBadge" class="badge">Checking...</div>
+  </header>
+
+  <main class="layout">
+    <section class="card live-card" aria-labelledby="liveTitle">
+      <div class="card-head">
+        <div>
+          <h2 id="liveTitle">1. Live camera capture</h2>
+          <p>Use rear camera when available. Sensors and GPS are optional and require permission.</p>
+        </div>
+        <span id="cameraState" class="pill">camera off</span>
+      </div>
+
+      <div class="video-shell">
+        <video id="video" playsinline autoplay muted></video>
+        <canvas id="reticleCanvas" aria-hidden="true"></canvas>
+        <div class="reticle-label" id="liveReadout">No stream</div>
+      </div>
+
+      <div class="button-grid">
+        <button id="startButton" class="primary">Enable camera + sensors</button>
+        <button id="captureButton" disabled>Capture plate + JSON</button>
+        <button id="switchButton" disabled>Switch camera</button>
+        <button id="geoButton">Update GPS</button>
+      </div>
+
+      <details class="details" open>
+        <summary>Capture options</summary>
+        <div class="form-grid">
+          <label>
+            Image type
+            <select id="imageType">
+              <option value="image/jpeg">JPEG</option>
+              <option value="image/png">PNG</option>
+              <option value="image/webp">WebP</option>
+            </select>
+          </label>
+          <label>
+            JPEG/WebP quality
+            <input id="quality" type="range" min="0.55" max="1" step="0.01" value="0.92" />
+            <output id="qualityOut">0.92</output>
+          </label>
+          <label>
+            Target width
+            <input id="targetWidth" type="number" min="640" max="4096" step="1" value="1920" />
+          </label>
+          <label>
+            Target height
+            <input id="targetHeight" type="number" min="480" max="4096" step="1" value="1080" />
+          </label>
+        </div>
+      </details>
+    </section>
+
+    <section class="card" aria-labelledby="calTitle">
+      <div class="card-head">
+        <div>
+          <h2 id="calTitle">2. Camera solve and scene alignment</h2>
+          <p>The browser exports measured settings when possible, then fills missing values with editable estimates.</p>
+        </div>
+      </div>
+
+      <div class="form-grid dense">
+        <label>
+          Active capture
+          <select id="activeCaptureSelect"></select>
+        </label>
+        <label>
+          Vertical FOV deg
+          <input id="verticalFov" type="range" min="25" max="110" step="0.1" value="55" />
+          <output id="verticalFovOut">55.0</output>
+        </label>
+        <label>
+          Near clip m
+          <input id="nearClip" type="number" min="0.001" max="10" step="0.001" value="0.03" />
+        </label>
+        <label>
+          Far clip m
+          <input id="farClip" type="number" min="1" max="10000" step="1" value="1000" />
+        </label>
+        <label>
+          Camera height m
+          <input id="cameraHeight" type="number" min="0" max="10" step="0.01" value="1.6" />
+        </label>
+        <label>
+          World units per meter
+          <input id="unitsPerMeter" type="number" min="0.001" max="1000" step="0.001" value="1" />
+        </label>
+        <label>
+          Horizon Y %
+          <input id="horizonY" type="range" min="0" max="100" step="0.1" value="50" />
+          <output id="horizonYOut">50.0</output>
+        </label>
+        <label>
+          Vanishing X %
+          <input id="vanishingX" type="range" min="0" max="100" step="0.1" value="50" />
+          <output id="vanishingXOut">50.0</output>
+        </label>
+        <label>
+          Yaw deg
+          <input id="yawDeg" type="number" min="-180" max="180" step="0.1" value="0" />
+        </label>
+        <label>
+          Pitch deg
+          <input id="pitchDeg" type="number" min="-89" max="89" step="0.1" value="0" />
+        </label>
+        <label>
+          Roll deg
+          <input id="rollDeg" type="number" min="-180" max="180" step="0.1" value="0" />
+        </label>
+        <label>
+          Background depth m
+          <input id="backgroundDepth" type="number" min="0.1" max="10000" step="0.1" value="20" />
+        </label>
+      </div>
+      <div class="button-grid compact">
+        <button id="solvePitchButton">Solve pitch from horizon</button>
+        <button id="applyCalibrationButton">Apply to active capture</button>
+        <button id="resetCalibrationButton">Reset estimates</button>
+      </div>
+    </section>
+
+    <section class="card preview-card" aria-labelledby="previewTitle">
+      <div class="card-head">
+        <div>
+          <h2 id="previewTitle">3. PS1-style plate preview</h2>
+          <p>Test a low-poly character on a fixed photo plate. Draw occluder masks for objects that should appear in front.</p>
+        </div>
+        <span id="previewState" class="pill">preview idle</span>
+      </div>
+
+      <div id="previewStage" class="preview-stage">
+        <img id="plateImage" alt="Selected captured background plate" />
+        <canvas id="threeCanvas"></canvas>
+        <canvas id="occlusionCanvas"></canvas>
+        <canvas id="maskEditCanvas"></canvas>
+        <div id="previewHint" class="preview-hint">Select or capture a plate, then press Start preview.</div>
+      </div>
+
+      <div class="button-grid">
+        <button id="startPreviewButton">Start preview</button>
+        <button id="pixelModeButton">Toggle PS1 pixel mode</button>
+        <button id="drawMaskButton">Draw occluder</button>
+        <button id="finishMaskButton">Finish polygon</button>
+        <button id="undoMaskPointButton">Undo point</button>
+        <button id="clearMasksButton">Clear masks</button>
+      </div>
+      <div class="joystick-row">
+        <button data-move="forward">Forward</button>
+        <button data-move="left">Left</button>
+        <button data-move="back">Back</button>
+        <button data-move="right">Right</button>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="exportsTitle">
+      <div class="card-head">
+        <div>
+          <h2 id="exportsTitle">4. Engine exports</h2>
+          <p>Generate snippets and manifests. Each capture ZIP contains the plate image, JSON, masks, and per-engine files.</p>
+        </div>
+      </div>
+      <div class="form-grid dense">
+        <label>
+          Export format
+          <select id="engineSelect">
+            <option value="generic">Generic manifest JSON</option>
+            <option value="unity">Unity C# helper</option>
+            <option value="unreal">Unreal JSON</option>
+            <option value="blender">Blender Python</option>
+            <option value="three">Three.js snippet</option>
+            <option value="godot">Godot GDScript</option>
+            <option value="gltf">glTF camera JSON</option>
+          </select>
+        </label>
+      </div>
+      <div class="button-grid compact">
+        <button id="generateSnippetButton">Generate snippet</button>
+        <button id="copySnippetButton">Copy snippet</button>
+        <button id="downloadActiveJsonButton">Download active JSON</button>
+        <button id="downloadActiveImageButton">Download active image</button>
+        <button id="downloadActiveZipButton">Download active ZIP</button>
+        <button id="downloadAllZipButton" class="primary">Download all captures ZIP</button>
+      </div>
+      <textarea id="snippetOutput" spellcheck="false" placeholder="Engine snippet appears here..."></textarea>
+    </section>
+
+    <section class="card gallery-card" aria-labelledby="galleryTitle">
+      <div class="card-head">
+        <div>
+          <h2 id="galleryTitle">5. Capture manager</h2>
+          <p>Captures are stored locally in this browser using IndexedDB. Export ZIPs for long-term storage.</p>
+        </div>
+        <span id="captureCount" class="pill">0 captures</span>
+      </div>
+      <div class="button-grid compact">
+        <button id="refreshButton">Refresh list</button>
+        <button id="deleteActiveButton" class="danger">Delete active</button>
+        <button id="deleteAllButton" class="danger">Delete all local captures</button>
+      </div>
+      <div id="gallery" class="gallery"></div>
+    </section>
+
+    <section class="card log-card" aria-labelledby="logTitle">
+      <h2 id="logTitle">Log</h2>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <template id="galleryItemTemplate">
+    <article class="gallery-item">
+      <img alt="Capture thumbnail" />
+      <div>
+        <h3></h3>
+        <p></p>
+        <div class="mini-row">
+          <button data-action="select">Select</button>
+          <button data-action="zip">ZIP</button>
+          <button data-action="delete" class="danger">Delete</button>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

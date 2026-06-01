@@ -1,0 +1,19 @@
+{
+  "name": "Phone Scene Calibrator",
+  "short_name": "SceneCal",
+  "description": "Capture mobile camera plates with paired camera metadata and engine export manifests.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#060913",
+  "theme_color": "#111827",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
